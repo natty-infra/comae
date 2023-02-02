@@ -28,7 +28,7 @@ WORKDIR /comae
 
 RUN chown -R 10001:10001 .
 
-COPY --from=build /comae/target/release/comae-rs ./
+COPY --from=build /comae/target/release/comae ./
 RUN mkdir -p /comae/keys
 
 USER comae:comae
