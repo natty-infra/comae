@@ -21,7 +21,7 @@ RUN cargo build --release
 
 FROM debian:buster-slim
 
-RUN apt-get install -y ca-certificates
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 COPY --from=build /etc/passwd /etc/passwd
 COPY --from=build /etc/group /etc/group
