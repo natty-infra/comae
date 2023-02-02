@@ -19,7 +19,7 @@ COPY ./ .
 
 RUN cargo build --release
 
-FROM debian:buster-slim
+FROM debian:buster
 
 RUN update-ca-certificates
 
