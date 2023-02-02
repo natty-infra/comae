@@ -2,7 +2,6 @@ use crate::sp;
 use crate::Data;
 use entity::{channels, platforms};
 use migration::OnConflict;
-use poise::serenity_prelude::EmbedField;
 use poise::serenity_prelude::Mentionable;
 use sea_orm::ModelTrait;
 use sea_orm::PaginatorTrait;
