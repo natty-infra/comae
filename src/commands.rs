@@ -42,7 +42,7 @@ impl PlatformType {
     }
 }
 
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, required_permissions = "ADMINISTRATOR")]
 pub(crate) async fn add_channel(
     ctx: Context<'_>,
     #[description = "Platform"] platform: PlatformType,
@@ -185,7 +185,7 @@ pub(crate) async fn list_channels(
     Ok(())
 }
 
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, required_permissions = "ADMINISTRATOR")]
 pub(crate) async fn remove_channel(
     ctx: Context<'_>,
     #[description = "Platform"] platform: PlatformType,
