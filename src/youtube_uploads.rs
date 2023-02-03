@@ -2,7 +2,7 @@ use entity::{channels, platforms, posts};
 use google_youtube3::hyper::client::HttpConnector;
 use google_youtube3::hyper_rustls::HttpsConnector;
 use google_youtube3::{hyper, hyper_rustls, oauth2, YouTube};
-use poise::serenity_prelude::{ChannelId, ParseValue};
+use poise::serenity_prelude::{ChannelId, Mentionable, ParseValue, RoleId};
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
 use std::error::Error;
 use std::fs;
@@ -111,18 +111,30 @@ impl<'a> UploadChecker {
                 post.save(&self.db).await?;
 
                 let channel_name = &channel.ch_description;
+                let mention = if let Some(role) = channel.ch_role_mention_id {
+                    RoleId::from(role as u64).mention().to_string()
+                } else {
+                    "@everyone".to_owned()
+                };
 
                 let text = format!(
-                        "Hey @everyone, **{channel_name}** has released a new video!\nhttps://youtube.com/watch?v={id}"
+                        "Hey {mention}, **{channel_name}** has released a new video!\nhttps://youtube.com/watch?v={id}"
                     );
 
                 ChannelId::from(channel.ch_discord_channel_id as u64)
                     .send_message(&ctx, |msg| {
-                        if self.debug_mode {
-                            msg.content(text).allowed_mentions(|am| am.empty_parse())
+                        if !self.debug_mode && channel.ch_mention_flag {
+                            msg.content(text).allowed_mentions(|am| {
+                                if let Some(role_id) = channel.ch_role_mention_id {
+                                    am.empty_parse()
+                                        .parse(ParseValue::Roles)
+                                        .roles(vec![role_id as u64])
+                                } else {
+                                    am.empty_parse().parse(ParseValue::Everyone)
+                                }
+                            })
                         } else {
-                            msg.content(text)
-                                .allowed_mentions(|am| am.empty_parse().parse(ParseValue::Everyone))
+                            msg.content(text).allowed_mentions(|am| am.empty_parse())
                         }
                     })
                     .await?;

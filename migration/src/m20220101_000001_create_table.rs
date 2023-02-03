@@ -150,7 +150,7 @@ impl MigrationTrait for Migration {
 }
 
 #[derive(Iden)]
-enum Platforms {
+pub enum Platforms {
     #[iden = "platforms"]
     Table,
     #[iden = "pl_id"]
@@ -162,7 +162,7 @@ enum Platforms {
 }
 
 #[derive(Iden)]
-enum Channels {
+pub enum Channels {
     #[iden = "channels"]
     Table,
     #[iden = "ch_id"]
@@ -175,10 +175,14 @@ enum Channels {
     DiscordChannelId,
     #[iden = "ch_pl_id"]
     PlatformId,
+    #[iden = "ch_mention_flag"]
+    MentionFlag,
+    #[iden = "ch_role_mention_id"]
+    RoleMentionId,
 }
 
 #[derive(Iden)]
-enum Posts {
+pub enum Posts {
     #[iden = "posts"]
     Table,
     #[iden = "po_id"]

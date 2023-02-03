@@ -129,11 +129,13 @@ async fn main() -> anyhow::Result<()> {
                 commands::account_age(),
                 commands::add_channel(),
                 commands::list_channels(),
+                commands::remove_channel(),
             ],
             prefix_options: poise::PrefixFrameworkOptions {
                 prefix: Some(">".to_string()),
                 edit_tracker: Some(poise::EditTracker::for_timespan(Duration::from_secs(3600))),
                 case_insensitive_commands: true,
+                mention_as_prefix: true,
                 ..Default::default()
             },
             event_handler: handle_event,

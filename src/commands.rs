@@ -3,6 +3,9 @@ use crate::Data;
 use entity::{channels, platforms};
 use migration::OnConflict;
 use poise::serenity_prelude::Mentionable;
+use poise::serenity_prelude::Role;
+use poise::serenity_prelude::RoleId;
+use sea_orm::ActiveValue::NotSet;
 use sea_orm::ModelTrait;
 use sea_orm::PaginatorTrait;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, Set};
@@ -45,6 +48,8 @@ pub(crate) async fn add_channel(
     #[description = "Platform"] platform: PlatformType,
     #[description = "Channel ID"] channel_id: String,
     #[description = "Channel name"] channel_name: String,
+    #[description = "Should ping"] should_ping: Option<bool>,
+    #[description = "Mentioned role"] mention_role: Option<Role>,
 ) -> Result<(), Error> {
     let db = ctx.framework().user_data.database.clone();
 
@@ -82,6 +87,9 @@ pub(crate) async fn add_channel(
         ch_description: Set(channel_name.clone()),
         ch_pl_id: Set(platform_info.pl_id),
         ch_discord_channel_id: Set(ctx.channel_id().into()),
+        ch_mention_flag: Set(should_ping.unwrap_or(true)),
+        ch_role_mention_id: mention_role
+            .map_or_else(|| NotSet, |ref role| Set(Some(role.id.0 as i64))),
         ..Default::default()
     };
 
@@ -91,7 +99,11 @@ pub(crate) async fn add_channel(
                 channels::Column::ChName,
                 channels::Column::ChDiscordChannelId,
             ])
-            .update_columns([channels::Column::ChDescription])
+            .update_columns([
+                channels::Column::ChDescription,
+                channels::Column::ChMentionFlag,
+                channels::Column::ChRoleMentionId,
+            ])
             .to_owned(),
         )
         .exec(&db)
@@ -153,13 +165,57 @@ pub(crate) async fn list_channels(
                     ctx.channel_id().mention()
                 ))
                 .colour((149, 66, 245))
-                .fields(
-                    sel.into_iter()
-                        .map(|ch| (ch.ch_description, ch.ch_name, true)),
-                )
+                .fields(sel.into_iter().map(|ch| {
+                    let info = format!(
+                        "**ID:** {}\n**Mentions:** {}\n**Pings:** {}",
+                        ch.ch_name,
+                        ch.ch_role_mention_id.map_or_else(
+                            || "@everyone".to_owned(),
+                            |v| RoleId(v as u64).mention().to_string()
+                        ),
+                        if ch.ch_mention_flag { "Yes" } else { "No" }
+                    );
+
+                    (ch.ch_description, info, true)
+                }))
         })
         .allowed_mentions(|m| m.empty_parse())
     })
     .await?;
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+pub(crate) async fn remove_channel(
+    ctx: Context<'_>,
+    #[description = "Platform"] platform: PlatformType,
+    #[description = "Channel ID"] channel_id: String,
+) -> Result<(), Error> {
+    let db = ctx.framework().user_data.database.clone();
+
+    let sel_base = channels::Entity::find()
+        .filter(
+            channels::Column::ChDiscordChannelId
+                .eq(ctx.channel_id().0 as i64)
+                .and(channels::Column::ChName.eq(channel_id)),
+        )
+        .find_also_related(platforms::Entity)
+        .filter(platforms::Column::PlName.eq(platform.str_repr()))
+        .one(&db)
+        .await?;
+
+    let Some((channel, _)) = sel_base else {
+        let response = "No such channel found.";
+        ctx.say(response).await?;
+        return Ok(());
+    };
+
+    let name = channel.ch_description.clone();
+    channel.delete(&db).await?;
+    ctx.say(format!(
+        "Channel **{name}** from platform **{platform}** deleted."
+    ))
+    .await?;
+
     Ok(())
 }

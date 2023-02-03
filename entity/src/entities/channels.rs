@@ -11,6 +11,8 @@ pub struct Model {
     pub ch_description: String,
     pub ch_discord_channel_id: i64,
     pub ch_pl_id: i64,
+    pub ch_role_mention_id: Option<i64>,
+    pub ch_mention_flag: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
