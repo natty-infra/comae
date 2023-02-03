@@ -102,7 +102,7 @@ fn handle_event<'a, E: From<serenity::Error>>(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv::dotenv().ok();
+    dotenvy::dotenv().ok();
 
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
