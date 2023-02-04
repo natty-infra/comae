@@ -117,7 +117,6 @@ impl Checker for PostChecker {
 
                 post.save(&self.db).await?;
 
-                let channel_name = &channel.ch_description;
                 let mention = if let Some(role) = channel.ch_role_mention_id {
                     RoleId::from(role as u64).mention().to_string()
                 } else {
@@ -131,8 +130,14 @@ impl Checker for PostChecker {
 
                 let url = entry.links.first().map_or("", |link| &link.href);
 
+                let subreddit = entry
+                    .categories
+                    .first()
+                    .and_then(|cat| cat.label.as_ref())
+                    .unwrap_or(&channel.ch_description);
+
                 let text = format!(
-                    "Hey {mention}, user **{author}** has posted on **r/{channel_name}**!\n{url}"
+                    "Hey {mention}, user **{author}** has posted on **{subreddit}**!\n{url}"
                 );
 
                 ChannelId::from(channel.ch_discord_channel_id as u64)

@@ -1,6 +1,6 @@
 use anyhow::Context;
 use migration::{Migrator, MigratorTrait};
-use poise::serenity_prelude as sp;
+use poise::serenity_prelude::{self as sp, Activity};
 use post_checker::{reddit_posts, youtube_uploads};
 use sea_orm::{ConnectOptions, DatabaseConnection};
 use serenity::model::application::command::Command;
@@ -20,6 +20,7 @@ struct Data {
     loop_running: AtomicBool,
     debug_mode: bool,
     database: DatabaseConnection,
+    version: String,
 }
 
 async fn register_commands<E>(
@@ -97,11 +98,13 @@ fn handle_event<'a, E: From<serenity::Error>>(
     ctx: &'a sp::Context,
     event: &'a poise::Event<'a>,
     framework: poise::FrameworkContext<'a, Data, E>,
-    _data: &'a Data,
+    data: &'a Data,
 ) -> poise::BoxFuture<'a, Result<(), E>> {
     Box::pin(async move {
         match event {
             poise::Event::Ready { .. } => {
+                ctx.set_activity(Activity::listening(&data.version)).await;
+
                 register_commands(ctx.http.clone(), &framework).await?;
             }
             poise::Event::CacheReady { .. } => {
@@ -164,6 +167,11 @@ async fn main() -> anyhow::Result<()> {
                     loop_running: false.into(),
                     debug_mode,
                     database,
+                    version: format!(
+                        "{} v.{}, powered by crabs!",
+                        env!("CARGO_PKG_NAME"),
+                        env!("CARGO_PKG_VERSION")
+                    ),
                 })
             })
         });
