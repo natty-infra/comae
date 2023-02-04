@@ -138,11 +138,12 @@ async fn main() -> anyhow::Result<()> {
         .map(|s| matches!(s.as_ref(), "yes" | "on" | "1" | "true"))
         .unwrap_or(false);
 
-    let mut opt = ConnectOptions::new(db_url.to_owned());
-    opt.max_connections(32)
+    let opt = ConnectOptions::new(db_url.to_owned())
+        .max_connections(32)
         .min_connections(8)
         .sqlx_logging(true)
-        .sqlx_logging_level(LevelFilter::Debug);
+        .sqlx_logging_level(LevelFilter::Debug)
+        .to_owned();
 
     let database = sea_orm::Database::connect(opt).await?;
     Migrator::up(&database, None).await?;
