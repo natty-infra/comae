@@ -1,9 +1,11 @@
 use entity::{channels, platforms, posts};
-use google_youtube3::hyper::client::HttpConnector;
-use google_youtube3::hyper_rustls::HttpsConnector;
-use google_youtube3::{hyper, hyper_rustls, oauth2, YouTube};
+use percent_encoding::NON_ALPHANUMERIC;
 use poise::serenity_prelude::{ChannelId, Mentionable, ParseValue, RoleId};
+use reqwest::header::{HeaderMap, HeaderValue};
+use reqwest::Client;
 use sea_orm::{ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set};
+use serde::Deserialize;
+use std::borrow::Cow;
 use std::error::Error;
 use std::fs;
 use std::sync::Arc;
@@ -11,43 +13,58 @@ use tracing::{error, info};
 
 use crate::commands::PlatformType;
 
-pub struct UploadChecker {
-    hub: YouTube<HttpsConnector<HttpConnector>>,
+use super::{fetch_rss, Checker};
+
+pub struct PostChecker {
+    client: Client,
     debug_mode: bool,
     db: DatabaseConnection,
 }
 
-impl<'a> UploadChecker {
-    pub async fn new(debug_mode: bool, connection: DatabaseConnection) -> Arc<UploadChecker> {
-        let connector = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_native_roots()
-            .https_only()
-            .enable_http2()
-            .build();
-        let youtube_client = hyper::Client::builder().build(connector);
+#[derive(Debug, Deserialize)]
+struct RedditClientConfig {
+    user_agent: String,
+}
 
-        let service_account_key = serde_json::from_str::<oauth2::ServiceAccountKey>(
-            fs::read_to_string("keys/youtube-service-account.json")
-                .unwrap()
-                .as_str(),
+impl PostChecker {
+    pub async fn new(debug_mode: bool, connection: DatabaseConnection) -> Arc<PostChecker> {
+        let reddit_config = serde_json::from_str::<RedditClientConfig>(
+            fs::read_to_string("keys/reddit-rss.json").unwrap().as_str(),
         )
         .unwrap();
 
-        let auth = oauth2::ServiceAccountAuthenticator::builder(service_account_key)
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "User-Agent",
+            HeaderValue::from_str(&reddit_config.user_agent).unwrap(),
+        );
+
+        let client = reqwest::Client::builder()
+            .https_only(true)
+            .default_headers(headers)
             .build()
-            .await
             .unwrap();
 
         Arc::new(Self {
-            hub: YouTube::new(youtube_client, auth),
+            client,
             debug_mode,
-            db: connection.clone(),
+            db: connection,
         })
     }
+}
 
-    pub async fn check(&self, ctx: impl AsRef<serenity::http::Http>) -> Result<(), Box<dyn Error>> {
+#[async_trait::async_trait]
+impl Checker for PostChecker {
+    fn name(&self) -> &str {
+        "Reddit"
+    }
+
+    async fn check(
+        &self,
+        ctx: impl AsRef<serenity::http::Http> + Send + Sync,
+    ) -> Result<(), Box<dyn Error + Send + Sync>> {
         let platform_channels = platforms::Entity::find()
-            .filter(platforms::Column::PlName.eq(PlatformType::YouTube.to_string()))
+            .filter(platforms::Column::PlName.eq(PlatformType::Reddit.to_string()))
             .find_with_related(channels::Entity)
             .all(&self.db)
             .await?
@@ -56,34 +73,24 @@ impl<'a> UploadChecker {
             .collect::<Vec<_>>();
 
         for channel in platform_channels {
-            let result = self
-                .hub
-                .playlist_items()
-                .list(&vec!["contentDetails".to_string()])
-                .playlist_id(&channel.ch_name)
-                .doit()
-                .await;
+            let subreddit =
+                percent_encoding::utf8_percent_encode(&channel.ch_name, NON_ALPHANUMERIC);
 
-            if let Err(ref err) = result {
-                error!("YouTube API error: {:?}", err);
+            let res = fetch_rss(
+                &self.client,
+                Cow::Owned(format!("https://reddit.com/r/{}/new.rss", subreddit)),
+            )
+            .await;
+
+            if let Err(ref err) = res {
+                error!("Reddit fetch error: {:?}", err);
                 continue;
             }
 
-            let (_, response) = result.unwrap();
+            let feed = res.unwrap();
 
-            let Some(items) = &response.items else { continue; };
-
-            for item in items {
-                let id_opt = item
-                    .content_details
-                    .as_ref()
-                    .and_then(|d| d.video_id.as_ref());
-
-                if id_opt.is_none() {
-                    continue;
-                }
-
-                let id = id_opt.unwrap();
+            for entry in feed.entries {
+                let id = entry.id;
 
                 let matches = posts::Entity::find()
                     .filter(posts::Column::PoName.eq(id.clone()))
@@ -117,9 +124,16 @@ impl<'a> UploadChecker {
                     "@everyone".to_owned()
                 };
 
+                let author = entry
+                    .authors
+                    .first()
+                    .map_or("<unknown>", |author| &author.name);
+
+                let url = entry.links.first().map_or("", |link| &link.href);
+
                 let text = format!(
-                        "Hey {mention}, **{channel_name}** has released a new video!\nhttps://youtube.com/watch?v={id}"
-                    );
+                    "Hey {mention}, user **{author}** has posted on **r/{channel_name}**!\n{url}"
+                );
 
                 ChannelId::from(channel.ch_discord_channel_id as u64)
                     .send_message(&ctx, |msg| {

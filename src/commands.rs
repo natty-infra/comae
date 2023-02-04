@@ -32,12 +32,15 @@ pub(crate) async fn account_age(
 pub enum PlatformType {
     #[name = "YouTube"]
     YouTube,
+    #[name = "Reddit"]
+    Reddit,
 }
 
 impl PlatformType {
     fn str_repr(&self) -> &'static str {
         match *self {
             Self::YouTube => "YouTube",
+            Self::Reddit => "Reddit",
         }
     }
 }

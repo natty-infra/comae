@@ -1,6 +1,6 @@
 [package]
 name = "comae"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 [workspace]
@@ -10,12 +10,21 @@ members = [".", "migration", "entity"]
 entity = { path = "entity" }
 migration = { path = "migration" }
 
+async-trait = "0.1"
+
 anyhow = "1.0"
 dotenvy = "0.15"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+reqwest = { version = "0.11", default-features = false, features = [
+    "rustls-tls-native-roots",
+    "json",
+] }
+percent-encoding = "2.2"
 poise = "0.5.2"
-google-youtube3 = "4.0.1+20220303"
+
+google-youtube3 = "4.0.1"
+feed-rs = "1.2"
 
 tokio = { version = "1.19", features = ["rt-multi-thread"] }
 
@@ -29,10 +38,7 @@ sea-orm = { version = "0.10", features = [
     "macros",
 ] }
 
-[dependencies.serenity]
-version = "0.11"
-default-features = false
-features = [
+serenity = { version = "0.11", default-features = false, features = [
     "builder",
     "cache",
     "chrono",
@@ -42,4 +48,4 @@ features = [
     "model",
     "utils",
     "rustls_backend",
-]
+] }

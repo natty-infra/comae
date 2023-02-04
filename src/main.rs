@@ -1,6 +1,7 @@
 use anyhow::Context;
 use migration::{Migrator, MigratorTrait};
 use poise::serenity_prelude as sp;
+use post_checker::{reddit_posts, youtube_uploads};
 use sea_orm::{ConnectOptions, DatabaseConnection};
 use serenity::model::application::command::Command;
 use std::env;
@@ -9,8 +10,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::error;
 
+use post_checker::Checker;
+
 mod commands;
-mod youtube_uploads;
+mod post_checker;
 
 struct Data {
     set_up_commands: AtomicBool,
@@ -65,13 +68,24 @@ async fn start_event_loop<'a, E>(
 }
 
 async fn event_loop_main<'a>(ctx: Arc<sp::Http>, database: DatabaseConnection, debug_mode: bool) {
-    let checker = youtube_uploads::UploadChecker::new(debug_mode, database).await;
-
+    let yt_checker = youtube_uploads::UploadChecker::new(debug_mode, database.clone()).await;
+    let yt_ctx = ctx.clone();
     tokio::spawn(async move {
-        let ctx = ctx.clone();
         loop {
-            if let Err(err) = checker.check(&ctx).await {
+            if let Err(err) = yt_checker.check(&yt_ctx).await {
                 error!("Failed to check for YouTube posts: {:?}", err);
+            }
+
+            tokio::time::sleep(Duration::from_secs(300)).await;
+        }
+    });
+
+    let reddit_checker = reddit_posts::PostChecker::new(debug_mode, database).await;
+    let reddit_ctx = ctx.clone();
+    tokio::spawn(async move {
+        loop {
+            if let Err(err) = reddit_checker.check(&reddit_ctx).await {
+                error!("Failed to check for Reddit posts: {:?}", err);
             }
 
             tokio::time::sleep(Duration::from_secs(300)).await;
