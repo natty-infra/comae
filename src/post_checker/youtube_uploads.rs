@@ -138,9 +138,7 @@ impl Checker for UploadChecker {
                         if !self.debug_mode && channel.ch_mention_flag {
                             msg.content(text).allowed_mentions(|am| {
                                 if let Some(role_id) = channel.ch_role_mention_id {
-                                    am.empty_parse()
-                                        .parse(ParseValue::Roles)
-                                        .roles(vec![role_id as u64])
+                                    am.empty_parse().roles(vec![role_id as u64])
                                 } else {
                                     am.empty_parse().parse(ParseValue::Everyone)
                                 }
