@@ -9,6 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::error;
+use tracing::log::LevelFilter;
+use tracing_subscriber::EnvFilter;
 
 use post_checker::Checker;
 
@@ -121,8 +123,12 @@ fn handle_event<'a, E: From<serenity::Error>>(
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
+
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
+        .with_env_filter(filter_layer)
         .with_test_writer()
         .init();
 
@@ -133,9 +139,12 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(false);
 
     let mut opt = ConnectOptions::new(db_url.to_owned());
-    opt.max_connections(32).min_connections(8);
+    opt.max_connections(32)
+        .min_connections(8)
+        .sqlx_logging(true)
+        .sqlx_logging_level(LevelFilter::Debug);
 
-    let database = sea_orm::Database::connect(&db_url).await?;
+    let database = sea_orm::Database::connect(opt).await?;
     Migrator::up(&database, None).await?;
 
     let token = env::var("DISCORD_TOKEN").expect("token");
